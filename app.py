@@ -3,72 +3,102 @@ import numpy as np
 import time
 import pandas as pd
 
-st.set_page_config(page_title="NeuroFlight™ Mission Analytics", layout="wide")
+st.set_page_config(page_title="NeuroFlight™ Tactical Command", layout="wide", initial_sidebar_state="collapsed")
 
-# --- DATASETIN SIMULAATIO ---
-def generate_mission_data():
-    seconds = np.arange(0, 301)
-    # Luodaan realistinen G-profiili
-    g_profile = 1.0 + 0.5 * np.sin(seconds / 15)
-    g_profile[40:70] += 5.5   # Dogfight 1
-    g_profile[150:190] += 7.0  # High-G Turn
-    g_profile[240:270] += 3.0  # Intercept
-    return seconds, np.clip(g_profile, 1.0, 9.0)
+# --- REALISTINEN LENTOPROFIILI (Mission Scenarios) ---
+def get_mission_g(t):
+    if t < 20: return 1.0 # Taxi & Takeoff
+    elif t < 60: return 3.0 + 1.0 * np.sin(t/5) # Basic Maneuvers (3-4G)
+    elif t < 100: return 1.5 # Straight & Level
+    elif t < 160: return 6.0 + 2.5 * np.sin(t/10) # High-G Combat (4-8.5G)
+    elif t < 200: return 4.5 # Sustained Turn (4-5G)
+    elif t < 250: return 8.5 - (t-220)*0.1 # G-Onset Test
+    else: return 1.2 # Landing approach
 
-time_steps, g_values = generate_mission_data()
+# --- UI ASETUKSET ---
+st.title("🛡️ NeuroFlight™ Tactical Analytics")
+st.write("Live Bio-Telemetry: Pilot Musculoskeletal Load vs. Flight Dynamics")
 
-st.title("🛡️ NeuroFlight™: Mission Replay")
-st.write("Real-time bio-telemetry showing muscle engagement vs. aircraft G-load.")
-
-# --- UI ELEMENTIT ---
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.subheader("Biological Load")
-    # Käytetään progress baria heatmapin sijaan, koska se on kevyempi ja sulavampi demossa
-    st.write("Neck Strain")
+    st.subheader("Physical Strain (%)")
+    # Luodaan placeholderit kaikille lihasryhmille
+    neck_label = st.empty()
     neck_bar = st.progress(0)
-    st.write("Lower Back (L1-L5)")
+    
+    back_label = st.empty()
     back_bar = st.progress(0)
-    st.write("Core/Abs")
+    
+    core_label = st.empty()
     core_bar = st.progress(0)
     
+    glute_label = st.empty()
+    glute_bar = st.progress(0)
+    
+    quad_label = st.empty()
+    quad_bar = st.progress(0)
+    
     st.markdown("---")
-    g_display = st.empty() # Tähän tulee iso G-luku
+    g_metric = st.empty()
 
 with col2:
-    st.subheader("Live Telemetry Stream")
-    # Luodaan tyhjä viivakaavio valmiiksi
-    chart_data = pd.DataFrame(columns=["G-Load", "Muscle Stress %"])
+    st.subheader("Mission Data Stream")
+    # Alustetaan tyhjä dataikkuna
+    chart_data = pd.DataFrame(columns=["Aircraft G-Load", "Muscle Activation (%)"])
     line_chart = st.line_chart(chart_data)
+    
+    st.info("💡 Technical Note: EMG signals are normalized to Pilot's Maximum Voluntary Contraction (MVC).")
 
 # --- ANIMATION LOOP ---
-if st.button('▶️ Start Mission Analysis'):
-    for t in range(len(time_steps)):
-        current_g = g_values[t]
+if st.button('▶️ START MISSION TELEMETRY'):
+    # Luodaan lista historiadataa varten, jotta se piirtyy nätisti
+    history = []
+    
+    for t in range(300): # 5 minuutin simulaatio
+        current_g = get_mission_g(t)
         
-        # Simuloidaan lihasrasitusta (%)
-        back_strain = min(100, int((current_g * 10) + np.random.randint(-2, 2)))
-        neck_strain = min(100, int((current_g * 11) + np.random.randint(-3, 3)))
-        core_strain = min(100, int((current_g * 7) + np.random.randint(-1, 5)))
-
-        # 1. Päivitetään palkit (ei vilku)
-        neck_bar.progress(neck_strain / 100)
-        back_bar.progress(back_strain / 100)
-        core_bar.progress(core_strain / 100)
+        # Realistinen lihas-aktivointi logiikka (EMG % MVC)
+        # G-voima vaatii eksponentiaalisesti enemmän työtä korkeilla tasoilla
+        base_strain = (current_g ** 1.8) * 1.5 
         
-        # 2. Päivitetään iso G-lukema
-        g_display.metric("Current Load", f"{current_g:.1f} G", 
-                         delta=f"{back_strain}% Strain", delta_color="inverse")
+        # Lihaskohtaiset kertoimet + pieni satunnaisvaihtelu
+        strains = {
+            "Neck": min(100, int(base_strain * 1.3 + np.random.randint(-2, 2))),
+            "Back": min(100, int(base_strain * 1.1 + np.random.randint(-1, 2))),
+            "Core": min(100, int(base_strain * 1.0 + np.random.randint(-3, 5))),
+            "Glutes": min(100, int(base_strain * 0.9 + np.random.randint(-2, 2))),
+            "Quads": min(100, int(base_strain * 1.2 + np.random.randint(-2, 4)))
+        }
 
-        # 3. Lisätään uusi datapiste viivakaavioon (SULAVA PÄIVITYS)
-        new_data = pd.DataFrame({
-            "G-Load": [current_g],
-            "Muscle Stress %": [back_strain / 10] # Skaalataan käyrälle sopivaksi
+        # 1. Päivitetään Numeeriset tekstit ja Mittarit (Asteikko 0-100%)
+        neck_label.write(f"Cervical (Neck): **{strains['Neck']}%**")
+        neck_bar.progress(strains['Neck'] / 100)
+        
+        back_label.write(f"Lumbar (Lower Back): **{strains['Back']}%**")
+        back_bar.progress(strains['Back'] / 100)
+        
+        core_label.write(f"Abdominal (Core): **{strains['Core']}%**")
+        core_bar.progress(strains['Core'] / 100)
+        
+        glute_label.write(f"Gluteus (Buttocks): **{strains['Glutes']}%**")
+        glute_bar.progress(strains['Glutes'] / 100)
+        
+        quad_label.write(f"Quadriceps (Thighs): **{strains['Quads']}%**")
+        quad_bar.progress(strains['Quads'] / 100)
+        
+        # 2. Päivitetään G-mittari
+        g_metric.metric("G-FORCE", f"{current_g:.1f} G", delta=f"{t}s Mission Time")
+
+        # 3. Päivitetään viivakaavio (Line Chart)
+        # Skaalataan lihasdata välille 0-10 (jotta se näkyy samalla asteikolla G-voiman kanssa)
+        new_entry = pd.DataFrame({
+            "Aircraft G-Load": [current_g],
+            "Muscle Activation (%)": [strains['Back'] / 10] 
         })
-        line_chart.add_rows(new_data)
+        line_chart.add_rows(new_entry)
 
-        # Säädetään nopeutta (0.1s on erittäin smooth, kokeile mikä tuntuu hyvältä)
+        # Simulaation nopeus (0.1s = 10Hz päivitys, tuntuu erittäin sulavalta)
         time.sleep(0.1)
 else:
-    st.info("Ready for deployment. Click 'Start' to begin telemetry stream.")
+    st.warning("Awaiting Signal from Smart-FR Layer... Click Start.")

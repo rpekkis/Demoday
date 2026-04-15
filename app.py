@@ -4,88 +4,80 @@ import numpy as np
 import time
 import pandas as pd
 
-# Sivun asetukset
-st.set_page_config(page_title="NeuroFlight™ Analytics Demo", layout="wide")
+st.set_page_config(page_title="NeuroFlight™ Mission Analytics", layout="wide")
 
-st.title("🚀 NeuroFlight™ Analytics - Real-time Bio-Monitoring")
-st.subheader("Human Attrition & G-Load Diagnostics")
+# --- DATASETIN SIMULAATIO (5 minuutin taistelu) ---
+def generate_mission_data():
+    # 300 sekuntia (5 min), päivitys 1s välein
+    seconds = np.arange(0, 301)
+    # G-voimat: Partiointi (1G), Takaa-ajo (4-6G), Tiukka kaarto (7-9G)
+    g_profile = 1.0 + 1.5 * np.sin(seconds / 20) + 0.5 * np.random.normal(0, 0.2, len(seconds))
+    # Lisätään muutama "High-G spike" (Dogfight)
+    g_profile[40:60] += 5.0
+    g_profile[120:160] += 6.5
+    g_profile[220:250] += 4.0
+    return seconds, np.clip(g_profile, 1.0, 9.0)
 
-# Sivupalkki ohjausta varten
-st.sidebar.header("Simulation Controls")
-g_force = st.sidebar.slider("G-Force Load", 1.0, 9.0, 1.0, 0.5)
-is_flying = st.sidebar.checkbox("Live Telemetry Stream", value=True)
+time_steps, g_values = generate_mission_data()
+
+# --- UI ELEMENTIT ---
+st.title("🛡️ NeuroFlight™: Mission Replay Analysis")
+st.write("Automatic monitoring of Pilot Physiological Integrity during Air Combat Maneuvers (ACM).")
+
+col1, col2 = st.columns([1, 2])
 
 # Simuloidaan lihasryhmiä
-muscle_groups = [
-    'Lower Back (L1-L5)', 'Upper Back (Trapezius)', 
-    'Neck (Cervical)', 'Quads (Left)', 'Quads (Right)', 'Core/Abs'
-]
+muscle_groups = ['Neck', 'Upper Traps', 'Lower Back', 'Core', 'Left Quad', 'Right Quad']
 
-# Funktio heatmapin luomiseen
-def create_heatmap(g_load):
-    # Simuloidaan rasitusta: Base strain + (G-force * kerroin) + kohina
-    strain_values = [
-        min(100, (g_load * 10) + np.random.randint(5, 15)) if i == 0 else # Selkä kovemmilla
-        min(100, (g_load * 8) + np.random.randint(2, 10)) 
-        for i in range(len(muscle_groups))
-    ]
-    
-    fig = go.Figure(data=[go.Bar(
-        x=muscle_groups,
-        y=strain_values,
-        marker=dict(
-            color=strain_values,
-            colorscale='YlOrRd', # Keltainen -> Oranssi -> Punainen
-            showscale=True,
-            cmin=0,
-            cmax=100
-        )
-    )])
-    
-    fig.update_layout(
-        title=f"Muscle Activation Intensity at {g_load}G",
-        yaxis=dict(title="Activation Level (%)", range=[0, 110]),
-        template="plotly_dark",
-        height=400
-    )
-    return fig, strain_values
+def get_muscle_strain(g_load):
+    # Eri lihakset reagoivat eri tavalla
+    neck = min(100, (g_load * 12) + np.random.randint(-5, 5))
+    back = min(100, (g_load * 10) + np.random.randint(-3, 3))
+    others = min(100, (g_load * 8) + np.random.randint(-2, 2))
+    return [neck, others, back, others, others, others]
 
-# Dashboardin asettelu
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    heatmap_placeholder = st.empty()
+# --- ANIMATION LOOP ---
+if st.button('▶️ Start Mission Playback'):
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     chart_placeholder = st.empty()
+    
+    # Placeholderit heatmapille ja vartalolle
+    with col1:
+        st.info("Biological Heatmap")
+        body_placeholder = st.empty()
+        
+    with col2:
+        st.info("Live G-Load & EMG Telemetry")
+        telemetry_placeholder = st.empty()
 
-with col2:
-    st.metric("System Status", "ACTIVE", delta="FR-Layer Connected")
-    st.metric("Pilot Fatigue Index", f"{int(g_force * 11)}%", delta="High Risk" if g_force > 6 else "Optimal")
-    
-    st.write("### Critical Alerts")
-    if g_force > 7:
-        st.error("⚠️ CRITICAL: Lower Back Strain exceeding 85%")
-    elif g_force > 5:
-        st.warning("⚡ WARNING: Sustained High G-Load")
-    else:
-        st.success("✅ Pilot physiological state: Stable")
+    for t in range(len(time_steps)):
+        current_g = g_values[t]
+        strains = get_muscle_strain(current_g)
+        
+        # Päivitetään edistyminen
+        progress_bar.progress(t / len(time_steps))
+        status_text.text(f"Mission Time: {t}s | Current Load: {current_g:.1f} G")
 
-# Simulaatio-looppi
-history = []
+        # 1. Heatmap (Palkit edustavat lihaksia)
+        fig = go.Figure(go.Bar(
+            x=muscle_groups,
+            y=strains,
+            marker=dict(color=strains, colorscale='Reds', cmin=0, cmax=100)
+        ))
+        fig.update_layout(template="plotly_dark", height=300, yaxis_range=[0,105])
+        body_placeholder.plotly_chart(fig, use_container_width=True)
 
-for i in range(100 if is_flying else 1):
-    fig, current_values = create_heatmap(g_force)
-    
-    with heatmap_placeholder:
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Historiadata käyrää varten
-    history.append(current_values[0]) # Seurataan alaselkää
-    if len(history) > 20: history.pop(0)
-    
-    with chart_placeholder:
-        st.line_chart(pd.DataFrame(history, columns=["Lower Back EMG Signal"]))
-    
-    if is_flying:
-        time.sleep(0.5)
-    else:
-        break
+        # 2. Telemetria-käyrä (G-voima ja Selän EMG rinnakkain)
+        tele_fig = go.Figure()
+        tele_fig.add_trace(go.Scatter(x=time_steps[:t], y=g_values[:t], name="G-Load", line=dict(color='cyan')))
+        tele_fig.add_trace(go.Scatter(x=time_steps[:t], y=[get_muscle_strain(g)[2] for g in g_values[:t]], 
+                                     name="Lower Back EMG (%)", line=dict(color='red', dash='dot')))
+        
+        tele_fig.update_layout(template="plotly_dark", height=400, title="Real-time Flight Data")
+        telemetry_placeholder.plotly_chart(tele_fig, use_container_width=True)
+
+        # Hidastetaan päivitystä (esim. 0.3s välein on silmälle miellyttävä)
+        time.sleep(0.3)
+else:
+    st.write("Click 'Start' to visualize the simulated 5-minute combat engagement.")

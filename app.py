@@ -135,12 +135,12 @@ if st.button('▶️ START REAL-TIME MISSION TELEMETRY'):
             )
             body_placeholder.plotly_chart(heatmap_fig, use_container_width=True)
 
-        # 2. PÄIVITETÄÄN PALKIT (Numeeriset prosentin 0-100)
+       # 2. PÄIVITETÄÄN PALKIT (Numeeriset prosentit 0-100)
         n_l.write(f"Cervical (Neck): **{strains['Neck']}%**"); n_b.progress(strains['Neck'] / 100.0)
         b_l.write(f"Lumbar (Lower Back): **{strains['Back']}%**"); b_b.progress(strains['Back'] / 100.0)
         c_l.write(f"Abdominal (Core): **{strains['Core']}%**"); c_b.progress(strains['Core'] / 100.0)
         g_l.write(f"Gluteus (Buttocks): **{strains['Glutes']}%**"); g_b.progress(strains['Glutes'] / 100.0)
-        q_l.write(f"Quadriceps (Thighs): **{s['Quads']}%**"); q_b.progress(strains['Quads'] / 100.0)
+        q_l.write(f"Quadriceps (Thighs): **{strains['Quads']}%**"); q_b.progress(strains['Quads'] / 100.0)
         
         # 3. PÄIVITETÄÄN KAKSI-AKSELINEN G-KÄYRÄ (Plotly Subplots)
         tele_fig = make_subplots(specs=[[{"secondary_y": True}]])

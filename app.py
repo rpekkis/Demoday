@@ -1,83 +1,74 @@
 import streamlit as st
-import plotly.graph_objects as go
 import numpy as np
 import time
 import pandas as pd
 
 st.set_page_config(page_title="NeuroFlight™ Mission Analytics", layout="wide")
 
-# --- DATASETIN SIMULAATIO (5 minuutin taistelu) ---
+# --- DATASETIN SIMULAATIO ---
 def generate_mission_data():
-    # 300 sekuntia (5 min), päivitys 1s välein
     seconds = np.arange(0, 301)
-    # G-voimat: Partiointi (1G), Takaa-ajo (4-6G), Tiukka kaarto (7-9G)
-    g_profile = 1.0 + 1.5 * np.sin(seconds / 20) + 0.5 * np.random.normal(0, 0.2, len(seconds))
-    # Lisätään muutama "High-G spike" (Dogfight)
-    g_profile[40:60] += 5.0
-    g_profile[120:160] += 6.5
-    g_profile[220:250] += 4.0
+    # Luodaan realistinen G-profiili
+    g_profile = 1.0 + 0.5 * np.sin(seconds / 15)
+    g_profile[40:70] += 5.5   # Dogfight 1
+    g_profile[150:190] += 7.0  # High-G Turn
+    g_profile[240:270] += 3.0  # Intercept
     return seconds, np.clip(g_profile, 1.0, 9.0)
 
 time_steps, g_values = generate_mission_data()
 
-# --- UI ELEMENTIT ---
-st.title("🛡️ NeuroFlight™: Mission Replay Analysis")
-st.write("Automatic monitoring of Pilot Physiological Integrity during Air Combat Maneuvers (ACM).")
+st.title("🛡️ NeuroFlight™: Mission Replay")
+st.write("Real-time bio-telemetry showing muscle engagement vs. aircraft G-load.")
 
+# --- UI ELEMENTIT ---
 col1, col2 = st.columns([1, 2])
 
-# Simuloidaan lihasryhmiä
-muscle_groups = ['Neck', 'Upper Traps', 'Lower Back', 'Core', 'Left Quad', 'Right Quad']
+with col1:
+    st.subheader("Biological Load")
+    # Käytetään progress baria heatmapin sijaan, koska se on kevyempi ja sulavampi demossa
+    st.write("Neck Strain")
+    neck_bar = st.progress(0)
+    st.write("Lower Back (L1-L5)")
+    back_bar = st.progress(0)
+    st.write("Core/Abs")
+    core_bar = st.progress(0)
+    
+    st.markdown("---")
+    g_display = st.empty() # Tähän tulee iso G-luku
 
-def get_muscle_strain(g_load):
-    # Eri lihakset reagoivat eri tavalla
-    neck = min(100, (g_load * 12) + np.random.randint(-5, 5))
-    back = min(100, (g_load * 10) + np.random.randint(-3, 3))
-    others = min(100, (g_load * 8) + np.random.randint(-2, 2))
-    return [neck, others, back, others, others, others]
+with col2:
+    st.subheader("Live Telemetry Stream")
+    # Luodaan tyhjä viivakaavio valmiiksi
+    chart_data = pd.DataFrame(columns=["G-Load", "Muscle Stress %"])
+    line_chart = st.line_chart(chart_data)
 
 # --- ANIMATION LOOP ---
-if st.button('▶️ Start Mission Playback'):
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    chart_placeholder = st.empty()
-    
-    # Placeholderit heatmapille ja vartalolle
-    with col1:
-        st.info("Biological Heatmap")
-        body_placeholder = st.empty()
-        
-    with col2:
-        st.info("Live G-Load & EMG Telemetry")
-        telemetry_placeholder = st.empty()
-
+if st.button('▶️ Start Mission Analysis'):
     for t in range(len(time_steps)):
         current_g = g_values[t]
-        strains = get_muscle_strain(current_g)
         
-        # Päivitetään edistyminen
-        progress_bar.progress(t / len(time_steps))
-        status_text.text(f"Mission Time: {t}s | Current Load: {current_g:.1f} G")
+        # Simuloidaan lihasrasitusta (%)
+        back_strain = min(100, int((current_g * 10) + np.random.randint(-2, 2)))
+        neck_strain = min(100, int((current_g * 11) + np.random.randint(-3, 3)))
+        core_strain = min(100, int((current_g * 7) + np.random.randint(-1, 5)))
 
-        # 1. Heatmap (Palkit edustavat lihaksia)
-        fig = go.Figure(go.Bar(
-            x=muscle_groups,
-            y=strains,
-            marker=dict(color=strains, colorscale='Reds', cmin=0, cmax=100)
-        ))
-        fig.update_layout(template="plotly_dark", height=300, yaxis_range=[0,105])
-        body_placeholder.plotly_chart(fig, use_container_width=True)
-
-        # 2. Telemetria-käyrä (G-voima ja Selän EMG rinnakkain)
-        tele_fig = go.Figure()
-        tele_fig.add_trace(go.Scatter(x=time_steps[:t], y=g_values[:t], name="G-Load", line=dict(color='cyan')))
-        tele_fig.add_trace(go.Scatter(x=time_steps[:t], y=[get_muscle_strain(g)[2] for g in g_values[:t]], 
-                                     name="Lower Back EMG (%)", line=dict(color='red', dash='dot')))
+        # 1. Päivitetään palkit (ei vilku)
+        neck_bar.progress(neck_strain / 100)
+        back_bar.progress(back_strain / 100)
+        core_bar.progress(core_strain / 100)
         
-        tele_fig.update_layout(template="plotly_dark", height=400, title="Real-time Flight Data")
-        telemetry_placeholder.plotly_chart(tele_fig, use_container_width=True)
+        # 2. Päivitetään iso G-lukema
+        g_display.metric("Current Load", f"{current_g:.1f} G", 
+                         delta=f"{back_strain}% Strain", delta_color="inverse")
 
-        # Hidastetaan päivitystä (esim. 0.3s välein on silmälle miellyttävä)
-        time.sleep(0.3)
+        # 3. Lisätään uusi datapiste viivakaavioon (SULAVA PÄIVITYS)
+        new_data = pd.DataFrame({
+            "G-Load": [current_g],
+            "Muscle Stress %": [back_strain / 10] # Skaalataan käyrälle sopivaksi
+        })
+        line_chart.add_rows(new_data)
+
+        # Säädetään nopeutta (0.1s on erittäin smooth, kokeile mikä tuntuu hyvältä)
+        time.sleep(0.1)
 else:
-    st.write("Click 'Start' to visualize the simulated 5-minute combat engagement.")
+    st.info("Ready for deployment. Click 'Start' to begin telemetry stream.")

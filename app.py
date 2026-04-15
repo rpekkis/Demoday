@@ -3,80 +3,90 @@ import numpy as np
 import time
 import pandas as pd
 
-st.set_page_config(page_title="NeuroFlight™ High-Speed Telemetry", layout="wide")
+st.set_page_config(page_title="NeuroFlight™ - G-Ready Telemetry", layout="wide")
 
-# --- REALISTINEN LENTOPROFIILI ---
-def get_mission_g(t):
-    if t < 20: return 1.0 
-    elif t < 60: return 3.0 + 2.0 * np.sin(t/5)
-    elif t < 100: return 1.5 
-    elif t < 160: return 6.5 + 2.5 * np.sin(t/8)
-    else: return 4.0 + np.cos(t/10)
+# --- REALISTINEN LENTOPROFIILI (Pehmeät siirtymät) ---
+def generate_flight_profile():
+    t = np.arange(0, 300)
+    g = np.ones(300)
+    
+    # 1. Alkuverkka (Pehmeä nousu 3G:hen)
+    g[20:50] = 1.0 + 2.0 * np.sin(np.linspace(0, np.pi, 30))
+    
+    # 2. Pitkäkestoinen 5G rasitus (Sustained Load)
+    g[70:110] = 5.0 + 0.3 * np.cos(np.linspace(0, 4*np.pi, 40)) 
+    
+    # 3. Dogfight-liikkeet (Ei pystysuoria droppeja)
+    g[130:180] = 4.0 + 4.5 * np.sin(np.linspace(0, 2*np.pi, 50))**2
+    
+    # 4. Loppuliuku
+    g[220:260] = np.linspace(g[219], 1.2, 40)
+    
+    return np.clip(g, 1.0, 9.0)
 
-def get_color(val):
-    r = int(np.clip((val / 50) * 255, 0, 255))
-    g = int(np.clip(255 - ((val - 50) / 50) * 255 if val > 50 else 255, 0, 255))
-    return f"rgb({r}, {g}, 0)"
+flight_data = generate_flight_profile()
 
-st.title("🛡️ NeuroFlight™ Real-Time Mission Control")
+st.title("🛡️ NeuroFlight™ Physiological Readiness")
+st.write("Anticipatory Muscle Engagement & Fluid G-Dynamics")
 
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.subheader("Biological Heatmap")
-    # Luodaan visuaaliset "sensoripisteet" isolla fontilla
-    h_places = {m: st.empty() for m in ["Neck", "Back", "Core", "Glutes", "Quads"]}
+    st.subheader("Physical Activation")
+    # Luodaan paikat tekstille ja palkille
+    muscle_ui = {}
+    for m in ["Neck", "Back", "Core", "Glutes", "Quads"]:
+        muscle_ui[m] = {"text": st.empty(), "bar": st.empty()}
+    
     st.markdown("---")
     g_metric = st.empty()
     status_msg = st.empty()
 
 with col2:
-    st.subheader("Flight Dynamics (G-Load)")
+    st.subheader("Tactical Flight Data")
     g_chart = st.line_chart(pd.DataFrame(columns=["G-Force"]), height=250)
-    
-    st.subheader("Physiological Response (EMG %)")
-    emg_chart = st.line_chart(pd.DataFrame(columns=["Muscle Activation %"]), height=250)
+    emg_chart = st.line_chart(pd.DataFrame(columns=["Total Muscle Prep %"]), height=250)
 
 # --- ANIMATION LOOP ---
-if st.button('▶️ START SUPER-SMOOTH TELEMETRY'):
-    # Käytetään listoja keräämään dataa
-    for t in range(250):
-        current_g = get_mission_g(t)
+if st.button('▶️ START MISSION ANALYSIS'):
+    for i in range(len(flight_data)):
+        current_g = flight_data[i]
         
-        # Lihasrasituskaava
-        base = (current_g ** 1.8) * 1.5
+        # ENNAKOIVA LOGIIKKA: Katsotaan tulevaa G-voimaa (1 sekunti eteenpäin)
+        future_g = flight_data[min(i + 10, len(flight_data)-1)]
+        
+        # Lihasaktivaatio reagoi enemmän tulevaan G-voimaan (valmistautuminen)
+        prep_factor = max(current_g, future_g)
+        base_strain = (prep_factor ** 1.8) * 1.5
+        
         strains = {
-            "Neck": int(np.clip(base * 1.3, 0, 100)),
-            "Back": int(np.clip(base * 1.1, 0, 100)),
-            "Core": int(np.clip(base * 1.0, 0, 100)),
-            "Glutes": int(np.clip(base * 0.9, 0, 100)),
-            "Quads": int(np.clip(base * 1.2, 0, 100))
+            "Neck": int(np.clip(base_strain * 1.3, 0, 100)),
+            "Back": int(np.clip(base_strain * 1.1, 0, 100)),
+            "Core": int(np.clip(base_strain * 1.4, 0, 100)), # Core jännittyy kovaa
+            "Glutes": int(np.clip(base_strain * 1.2, 0, 100)),
+            "Quads": int(np.clip(base_strain * 1.2, 0, 100))
         }
 
-        # 1. PÄIVITETÄÄN HEATMAP (HTML on nopein)
-        for muscle, val in strains.items():
-            color = get_color(val)
-            h_places[muscle].markdown(
-                f"""<div style="background-color: #1e1e1e; padding: 10px; border-radius: 10px; border-left: 10px solid {color}; margin-bottom: 5px;">
-                    <span style="font-size: 14px; color: gray;">{muscle.upper()}</span><br>
-                    <span style="font-size: 24px; font-weight: bold; color: white;">{val}%</span>
-                </div>""", unsafe_allow_html=True
-            )
+        # 1. PÄIVITETÄÄN TÄYTTYVÄT PALKIT (Progress bars)
+        for m, val in strains.items():
+            muscle_ui[m]["text"].write(f"**{m}**: {val}%")
+            # st.progress vaatii arvon 0.0 - 1.0
+            muscle_ui[m]["bar"].progress(val / 100.0)
 
-        # 2. PÄIVITETÄÄN KAAVIOT (add_rows on Streamlitin nopein tapa)
-        # Nämä piirtyvät pikkuhiljaa vasemmalta oikealle täysin sulavasti
+        # 2. PÄIVITETÄÄN KAAVIOT
         g_chart.add_rows(pd.DataFrame({"G-Force": [current_g]}))
-        emg_chart.add_rows(pd.DataFrame({"Muscle Activation %": [float(strains["Back"])]}))
+        emg_chart.add_rows(pd.DataFrame({"Total Muscle Prep %": [float(strains["Core"])]}))
 
         # 3. METRIIKAT
-        g_metric.metric("LIVE G-LOAD", f"{current_g:.1f} G")
+        g_metric.metric("LIVE LOAD", f"{current_g:.1f} G")
         
-        if strains['Back'] > 85:
-            status_msg.error("CRITICAL STRAIN")
-        elif current_g > 7:
-            status_msg.warning("HIGH G-LOAD")
+        # Statusteksti ennakoivasta tilasta
+        if future_g > current_g + 0.5:
+            status_msg.info("PREPARING FOR G-ONSET")
+        elif current_g > 4.5:
+            status_msg.error("SUSTAINED LOAD")
         else:
-            status_msg.success("STABLE")
+            status_msg.success("OPTIMAL")
 
-        # 0.05s - 0.1s on optimaalinen "smooth" efekti
-        time.sleep(0.08)
+        # Hidastettu tempo (0.15s - 0.2s antaa aikaa selittää)
+        time.sleep(0.15)

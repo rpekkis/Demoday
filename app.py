@@ -36,27 +36,27 @@ def render_bar(label, value):
                 <span style="font-size: 13px; color: #eee;">{value}% MVC</span>
             </div>
             <div style="background-color: #333; border-radius: 4px; width: 100%; height: 10px;">
-                <div style="background-color: {color}; width: {value}%; height: 10px; border-radius: 4px; transition: width 0.15s;"></div>
+                <div style="background-color: {color}; width: {value}%; height: 10px; border-radius: 4px;"></div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-# --- UUSI HTML-PALLO-LOGIIKKA (POISTAA VILKKUMISEN) ---
+# --- SENSORIPALLOJEN HTML (VAKAA, EI VILKU) ---
 def get_sensor_html(strains):
-    # Koordinaatit [% ylhäältä, % vasemmalta] suhteessa kuvaan
+    # Koordinaatit [% ylhäältä, % vasemmalta]
     locs = {
-        "Neck": [15, 50], "Back": [40, 50], "Core": [50, 50],
-        "Glutes": [62, 50], "Quads": [80, 50]
+        "Neck": [12, 50], "Back": [38, 50], "Core": [50, 50],
+        "Glutes": [62, 50], "Quads": [82, 50]
     }
     html = ""
     for m, pos in locs.items():
         val = strains[m]
         color = get_h_color(val)
-        # Pallot eivät vilku, koska ne päivitetään pelkkinä HTML-div-elementteinä
+        # Pallo muuttaa väriä, mutta div-elementti pysyy vakaana
         html += f"""<div style="position: absolute; top: {pos[0]}%; left: {pos[1]}%; 
-                    transform: translate(-50%, -50%); width: 25px; height: 25px; 
+                    transform: translate(-50%, -50%); width: 22px; height: 22px; 
                     background-color: {color}; border-radius: 50%; border: 2px solid white; 
-                    box-shadow: 0 0 15px {color}; z-index: 10;"></div>"""
+                    box-shadow: 0 0 12px {color};"></div>"""
     return html
 
 st.title("🛡️ NeuroFlight™ Sensor Diagnostics")
@@ -70,7 +70,7 @@ col_heat, col_charts = st.columns([1.2, 2])
 
 with col_heat:
     st.subheader("Anatomical Heatmap")
-    heatmap_placeholder = st.empty() # Tähän tulee kuva + HTML-pallot
+    heatmap_placeholder = st.empty() 
     st.markdown("---")
     bars = {m: st.empty() for m in ["Neck", "Back", "Core", "Glutes", "Quads"]}
 
@@ -87,7 +87,6 @@ if start_opt or start_sub:
     mode = "OPTIMAL" if start_opt else "SUBOPTIMAL"
     img_path = "body.png"
     
-    # Ladataan kuva kerran ja koodataan se, jotta se näkyy varmasti
     if os.path.exists(img_path):
         with open(img_path, "rb") as f:
             b64_img = base64.b64encode(f.read()).decode()
@@ -119,15 +118,17 @@ if start_opt or start_sub:
                 "Quads": int(np.clip((current_g**1.5) * 1.1 + noise(), 0, 52))
             }
 
-        # --- TÄSSÄ SE MUUTOS: HTML-POHJAINEN VAKAAN KUVA JA PALLOT ---
+        # --- TÄMÄ ON SE VAKAA RAKENNE ---
+        # Käytetään flex-boxia ja suhteellista asemointia, jotta kuva ei ole "zoomattu"
         heatmap_placeholder.markdown(f"""
-            <div style="position: relative; width: 100%; max-width: 350px; margin: auto; background-color: #0e1117; border-radius: 10px; padding: 10px;">
-                <img src="{img_src}" style="width: 100%; opacity: 0.4; filter: brightness(0.8);">
-                {get_sensor_html(strains)}
+            <div style="display: flex; justify-content: center; background-color: #0e1117; padding: 10px; border-radius: 10px;">
+                <div style="position: relative; width: 100%; max-width: 300px;">
+                    <img src="{img_src}" style="width: 100%; display: block; opacity: 0.5;">
+                    {get_sensor_html(strains)}
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
-        # --- SÄILYTETYT MUUT ELEMENTIT ---
         for m, val in strains.items():
             with bars[m]:
                 render_bar(m, val)
@@ -139,4 +140,4 @@ if start_opt or start_sub:
         }))
         g_metric.metric("G-LOAD", f"{current_g:.1f} G", delta=f"{mode}")
         
-        time.sleep(0.18)
+        time.sleep(0.12)

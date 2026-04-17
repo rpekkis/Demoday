@@ -2,14 +2,12 @@ import streamlit as st
 import numpy as np
 import time
 import pandas as pd
-import plotly.graph_objects as go
 import base64
-from PIL import Image
 import os
 
 st.set_page_config(page_title="NeuroFlight™ - Tactical Analytics", layout="wide", initial_sidebar_state="collapsed")
 
-# --- KONFIGURAATIO JA LENTOPROFIILI ---
+# --- KONFIGURAATIO JA LENTOPROFIILI (SÄILYTETTY) ---
 def generate_aggressive_profile():
     t = np.arange(0, 300)
     g = np.ones(300)
@@ -23,7 +21,7 @@ def generate_aggressive_profile():
 
 flight_data = generate_aggressive_profile()
 
-# --- APUFUNKTIOT VISUALISOINTIIN ---
+# --- APUFUNKTIOT VISUALISOINTIIN (SÄILYTETTY) ---
 def get_h_color(val):
     r = int(np.clip((val / 50) * 255, 0, 255))
     g = int(np.clip(255 - ((val - 50) / 50) * 255 if val > 50 else 255, 0, 255))
@@ -43,6 +41,24 @@ def render_bar(label, value):
         </div>
     """, unsafe_allow_html=True)
 
+# --- UUSI HTML-PALLO-LOGIIKKA (POISTAA VILKKUMISEN) ---
+def get_sensor_html(strains):
+    # Koordinaatit [% ylhäältä, % vasemmalta] suhteessa kuvaan
+    locs = {
+        "Neck": [15, 50], "Back": [40, 50], "Core": [50, 50],
+        "Glutes": [62, 50], "Quads": [80, 50]
+    }
+    html = ""
+    for m, pos in locs.items():
+        val = strains[m]
+        color = get_h_color(val)
+        # Pallot eivät vilku, koska ne päivitetään pelkkinä HTML-div-elementteinä
+        html += f"""<div style="position: absolute; top: {pos[0]}%; left: {pos[1]}%; 
+                    transform: translate(-50%, -50%); width: 25px; height: 25px; 
+                    background-color: {color}; border-radius: 50%; border: 2px solid white; 
+                    box-shadow: 0 0 15px {color}; z-index: 10;"></div>"""
+    return html
+
 st.title("🛡️ NeuroFlight™ Sensor Diagnostics")
 st.write("Aggressive G-Dynamics & Anticipatory Bio-Response")
 
@@ -54,9 +70,8 @@ col_heat, col_charts = st.columns([1.2, 2])
 
 with col_heat:
     st.subheader("Anatomical Heatmap")
-    heatmap_placeholder = st.empty()
+    heatmap_placeholder = st.empty() # Tähän tulee kuva + HTML-pallot
     st.markdown("---")
-    # Palkit lisätiedoksi
     bars = {m: st.empty() for m in ["Neck", "Back", "Core", "Glutes", "Quads"]}
 
 with col_charts:
@@ -70,6 +85,16 @@ with col_charts:
 # --- SIMULAATIO ---
 if start_opt or start_sub:
     mode = "OPTIMAL" if start_opt else "SUBOPTIMAL"
+    img_path = "body.png"
+    
+    # Ladataan kuva kerran ja koodataan se, jotta se näkyy varmasti
+    if os.path.exists(img_path):
+        with open(img_path, "rb") as f:
+            b64_img = base64.b64encode(f.read()).decode()
+            img_src = f"data:image/png;base64,{b64_img}"
+    else:
+        st.error("body.png missing! Tallenna kuva koodin kanssa samaan kansioon.")
+        st.stop()
     
     for i in range(len(flight_data)):
         current_g = flight_data[i]
@@ -94,45 +119,19 @@ if start_opt or start_sub:
                 "Quads": int(np.clip((current_g**1.5) * 1.1 + noise(), 0, 52))
             }
 
-        # --- HEATMAP PLOTLY ---
-        fig_body = go.Figure()
-        
-        # Sijoitetaan lihakset tarkasti (koordinaatit 0-100)
-        locs = {
-            "Neck": [50, 88], "Back": [50, 70], "Core": [50, 55],
-            "Glutes": [50, 42], "Quads": [50, 25]
-        }
-        
-        # PIIRRETÄÄN VARTALON SILUETTI (Tämä korvaa tekstin)
-        fig_body.add_shape(type="path",
-            path="M50,95 L55,92 L58,85 L58,75 L65,70 L65,50 L60,30 L55,10 L45,10 L40,30 L35,50 L35,70 L42,75 L42,85 L45,92 Z",
-            fillcolor="rgba(255, 255, 255, 0.1)",
-            line=dict(color="rgba(255, 255, 255, 0.3)", width=2),
-            xref="x", yref="y"
-        )
+        # --- TÄSSÄ SE MUUTOS: HTML-POHJAINEN VAKAAN KUVA JA PALLOT ---
+        heatmap_placeholder.markdown(f"""
+            <div style="position: relative; width: 100%; max-width: 350px; margin: auto; background-color: #0e1117; border-radius: 10px; padding: 10px;">
+                <img src="{img_src}" style="width: 100%; opacity: 0.4; filter: brightness(0.8);">
+                {get_sensor_html(strains)}
+            </div>
+        """, unsafe_allow_html=True)
 
-        for m, loc in locs.items():
-            fig_body.add_trace(go.Scatter(
-                x=[loc[0]], y=[loc[1]],
-                mode='markers',
-                marker=dict(size=40, color=get_h_color(strains[m]), line=dict(width=2, color='white')),
-                showlegend=False, hoverinfo="none"
-            ))
-
-        fig_body.update_layout(
-            template="plotly_dark", height=550, margin=dict(l=0,r=0,t=0,b=0),
-            xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, autorange='reversed'),
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)"
-        )
-        heatmap_placeholder.plotly_chart(fig_body, use_container_width=True, key=f"body_{i}")
-
-        # --- PÄIVITETÄÄN PALKIT ---
+        # --- SÄILYTETYT MUUT ELEMENTIT ---
         for m, val in strains.items():
             with bars[m]:
                 render_bar(m, val)
 
-        # --- PÄIVITETÄÄN KAAVIOT ---
         g_chart.add_rows(pd.DataFrame({"G-Force (G)": [current_g]}))
         emg_chart.add_rows(pd.DataFrame({
             "Lower Body Activation (%)": [float((strains["Core"] + strains["Quads"])/2)],
